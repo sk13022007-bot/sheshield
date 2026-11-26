@@ -1,5 +1,6 @@
+import os
 import re
-
+import joblib
 RULES = {
     "blackmail": {
         "weight": 45,
@@ -73,3 +74,28 @@ def analyze(text: str) -> dict:
     else:
         level = "high"
     return {"score": score, "severity": level, "findings": found}
+    import os
+import joblib
+
+_path = os.path.join(os.path.dirname(__file__), "toxicity_model.joblib")
+_MODEL = joblib.load(_path) if os.path.exists(_path) else None
+
+_rule_analyze = analyze
+
+
+def analyze(text: str) -> dict:
+    result = _rule_analyze(text)
+    if _MODEL is not None:
+        p = float(_MODEL.predict_proba([text])[0][1])
+        result["ml_probability"] = round(p, 2)
+        score = max(result["score"], int(p * 100))
+        result["score"] = score
+        if score == 0:
+            result["severity"] = "none"
+        elif score < 40:
+            result["severity"] = "low"
+        elif score < 70:
+            result["severity"] = "medium"
+        else:
+            result["severity"] = "high"
+    return result
