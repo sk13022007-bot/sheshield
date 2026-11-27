@@ -1,6 +1,5 @@
-_pycache_/
+__pycache__/
 venv/
 .env
-_pycache_/
-venv/
-.env
+vault.db
+tamper_backup.json

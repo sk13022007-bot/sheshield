@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SheShield</title>
+<style>
+  :root { --bg:#faf7fc; --card:#fff; --ink:#2b2236; --muted:#6b6478;
+          --brand:#7b3fbf; --line:#e6dff0;
+          --none:#2e9e5b; --low:#d9a400; --medium:#e07b00; --high:#d62839; }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family: system-ui, Segoe UI, Arial, sans-serif;
+         background:var(--bg); color:var(--ink); line-height:1.45; }
+  header { background:var(--brand); color:#fff; padding:16px; }
+  header h1 { margin:0; font-size:1.4rem; }
+  header p { margin:4px 0 0; font-size:.9rem; opacity:.9; }
+  main { max-width:760px; margin:0 auto; padding:12px; }
+  .card { background:var(--card); border:1px solid var(--line);
+          border-radius:12px; padding:14px; margin:12px 0; }
+  h2 { margin:0 0 10px; font-size:1.05rem; }
+  h3 { margin:12px 0 4px; font-size:.95rem; }
+  textarea { width:100%; min-height:110px; padding:10px; font-size:1rem;
+             border:1px solid var(--line); border-radius:8px; resize:vertical; }
+  input[type=file] { width:100%; padding:8px; border:1px dashed var(--brand);
+                     border-radius:8px; background:#fcfaff; }
+  img.preview { max-width:100%; max-height:260px; border-radius:8px;
+                margin-top:10px; border:1px solid var(--line); display:none; }
+  .row { display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; }
+  button { background:var(--brand); color:#fff; border:0; border-radius:8px;
+           padding:10px 14px; font-size:.95rem; cursor:pointer; flex:1 1 auto; }
+  button.alt { background:#fff; color:var(--brand); border:1px solid var(--brand); }
+  button:disabled { opacity:.5; }
+  .badge { display:inline-block; color:#fff; padding:4px 12px;
+           border-radius:999px; font-weight:600; text-transform:uppercase; }
+  .sev-none{background:var(--none)} .sev-low{background:var(--low)}
+  .sev-medium{background:var(--medium)} .sev-high{background:var(--high)}
+  .muted { color:var(--muted); font-size:.85rem; }
+  ul { margin:6px 0 0; padding-left:20px; }
+  .ev { border-top:1px solid var(--line); padding:8px 0; font-size:.9rem;
+        white-space:pre-wrap; }
+  .hash { font-family:Consolas, monospace; font-size:.78rem; color:var(--muted);
+          word-break:break-all; }
+  .ok { color:var(--none); font-weight:600; }
+  .bad { color:var(--high); font-weight:600; }
+  .help li { margin-bottom:6px; }
+  .idbox { background:#f6f0fb; border-radius:8px; padding:10px; margin-top:8px;
+           font-size:.9rem; }
+  .idbox div { margin:3px 0; word-break:break-all; }
+  .warn { background:#fff6e5; border:1px solid #f0d9a8; border-radius:8px;
+          padding:8px; font-size:.82rem; margin-top:8px; }
+  footer { text-align:center; padding:16px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>SheShield</h1>
+  <p>Upload a screenshot or paste a message. Keep tamper-proof evidence. Know your next steps.</p>
+</header>
+
+<main>
+  <section class="card">
+    <h2>1. Upload a screenshot</h2>
+    <input type="file" id="file" accept="image/*" onchange="onFile()">
+    <img id="preview" class="preview" alt="Screenshot preview">
+    <div class="row">
+      <button id="btnRead" onclick="readImage()" disabled>Read screenshot</button>
+      <button id="btnClear" class="alt" onclick="clearImage()" disabled>Remove screenshot</button>
+    </div>
+    <p class="muted">The image itself is not stored. Only the extracted text, details found in it, and the image's fingerprint (hash) are kept.</p>
+  </section>
+
+  <section class="card">
+    <h2>2. Or paste a message</h2>
+    <textarea id="msg" placeholder="Paste a message here (English, Hindi or Kannada). Text read from a screenshot appears here and can be corrected."></textarea>
+    <div class="row">
+      <button id="btnAnalyze" onclick="doAnalyze()">Analyze</button>
+      <button id="btnSave" class="alt" onclick="doSave()" disabled>Save to vault</button>
+    </div>
+    <p class="muted">Results are likelihoods, not verdicts. Only you decide what to do next.</p>
+  </section>
+
+  <section class="card" id="resultCard" style="display:none">
+    <h2>Result</h2>
+    <div id="result"></div>
+    <div id="idsBox"></div>
+  </section>
+
+  <section class="card">
+    <h2>3. Evidence vault</h2>
+    <div class="row">
+      <button onclick="doVerify()">Verify vault</button>
+      <button class="alt" onclick="loadVault()">Refresh list</button>
+      <button class="alt" onclick="downloadReport()">Download report (PDF)</button>
+    </div>
+    <p id="verifyMsg" class="muted"></p>
+    <div id="vaultList"></div>
+  </section>
+
+  <section class="card help">
+    <h2>4. What to do next</h2>
+    <ul>
+      <li>Do not delete the messages. Keep the original screenshots and note dates and times.</li>
+      <li>Report online at the National Cyber Crime Reporting Portal: <b>cybercrime.gov.in</b></li>
+      <li>National Cyber Crime Helpline: <b>1930</b></li>
+      <li>Women Helpline: <b>181</b></li>
+      <li>Emergency (police): <b>112</b></li>
+      <li>Give the police the phone numbers and handles shown above. They can request the owner's details from the telecom operator or platform.</li>
+      <li>Tell a trusted person. You do not have to handle this alone.</li>
+    </ul>
+    <p class="muted">Block the sender only after you have saved the evidence.</p>
+  </section>
+</main>
+
+<footer class="muted">SheShield. Consent first, no public naming, data minimization.</footer>
+
+<script>
+var currentImage = null;   // { sha: "...", identifiers: {...} } after a screenshot is read
+
+function esc(s) {
+  return String(s).replace(/[&<>"']/g, function (c) {
+    return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];
+  });
+}
+
+async function api(path, method, body) {
+  var opts = { method: method || "GET", headers: {} };
+  if (body) {
+    opts.headers["Content-Type"] = "application/json";
+    opts.body = JSON.stringify(body);
+  }
+  var res = await fetch(path, opts);
+  if (!res.ok) {
+    var detail = "";
+    try { detail = (await res.json()).detail || ""; } catch (e) {}
+    throw new Error(detail || ("Server error " + res.status));
+  }
+  return res.json();
+}
+
+function findingText(f) {
+  if (typeof f === "string") return f;
+  if (f && typeof f === "object") {
+    var parts = [];
+    for (var k in f) {
+      if (f[k] !== null && f[k] !== undefined && f[k] !== "") {
+        parts.push(k + ": " + (typeof f[k] === "object" ? JSON.stringify(f[k]) : f[k]));
+      }
+    }
+    return parts.join(" | ");
+  }
+  return String(f);
+}
+
+function renderAnalysis(r) {
+  var sev = r.severity || "none";
+  var html = '<span class="badge sev-' + esc(sev) + '">' + esc(sev) + '</span>';
+  html += ' &nbsp; Score: <b>' + esc(r.score) + '/100</b>';
+  if (r.ml_probability !== undefined) {
+    html += '<p class="muted">AI toxicity likelihood: ' +
+            Math.round(r.ml_probability * 100) + '%</p>';
+  }
+  var findings = r.findings || [];
+  if (findings.length) {
+    html += '<p><b>Why this was flagged:</b></p><ul>';
+    findings.forEach(function (f) { html += '<li>' + esc(findingText(f)) + '</li>'; });
+    html += '</ul>';
+  } else {
+    html += '<p class="muted">No harassment patterns found by the rules.</p>';
+  }
+  if (sev === "high" || sev === "medium") {
+    html += '<p><b>Suggested next step:</b> save this to the vault, then see the reporting steps below.</p>';
+  }
+  document.getElementById("result").innerHTML = html;
+  document.getElementById("resultCard").style.display = "block";
+  document.getElementById("btnSave").disabled = false;
+}
+
+function renderIdentifiers(ids) {
+  var box = document.getElementById("idsBox");
+  if (!ids) { box.innerHTML = ""; return; }
+  var html = "";
+  var phones = ids.phones || [];
+  var others = [["Emails", ids.emails], ["UPI IDs", ids.upi_ids],
+                ["Links", ids.urls], ["Handles", ids.handles]];
+  var any = phones.length > 0;
+  others.forEach(function (o) { if (o[1] && o[1].length) any = true; });
+
+  html += '<h3>Details found in the screenshot</h3>';
+  if (!any) {
+    html += '<p class="muted">No phone numbers, emails, links or handles were found. ' +
+            'If one is visible in the image, type it into the box above.</p>';
+  } else {
+    html += '<div class="idbox">';
+    phones.forEach(function (p) {
+      html += '<div><b>Phone:</b> ' + esc(p.display) +
+              (p.valid ? '' : ' <span class="muted">(format looks invalid)</span>') +
+              '<br><span class="muted">Registered region: ' + esc(p.region || "unknown") +
+              (p.carrier ? ' | Original carrier: ' + esc(p.carrier) : '') + '</span></div>';
+    });
+    others.forEach(function (o) {
+      (o[1] || []).forEach(function (v) {
+        html += '<div><b>' + o[0] + ':</b> ' + esc(v) + '</div>';
+      });
+    });
+    html += '</div>';
+    html += '<div class="warn">SheShield shows what is visible in the screenshot. It does not and cannot ' +
+            'identify who owns a number or account. Region and carrier show only where the number was ' +
+            'first issued, and numbers can be spoofed or come from calling apps. The police can request the ' +
+            'real owner details from the telecom operator or platform. You can also report suspected ' +
+            'misuse at <b>sancharsaathi.gov.in</b>.</div>';
+  }
+  box.innerHTML = html;
+}
+
+function onFile() {
+  var f = document.getElementById("file").files[0];
+  var img = document.getElementById("preview");
+  if (!f) { clearImage(); return; }
+  img.src = URL.createObjectURL(f);
+  img.style.display = "block";
+  document.getElementById("btnRead").disabled = false;
+  document.getElementById("btnClear").disabled = false;
+}
+
+function clearImage() {
+  document.getElementById("file").value = "";
+  document.getElementById("preview").style.display = "none";
+  document.getElementById("btnRead").disabled = true;
+  document.getElementById("btnClear").disabled = true;
+  currentImage = null;
+  document.getElementById("idsBox").innerHTML = "";
+}
+
+async function readImage() {
+  var f = document.getElementById("file").files[0];
+  if (!f) return;
+  var btn = document.getElementById("btnRead");
+  btn.disabled = true; btn.textContent = "Reading...";
+  try {
+    var fd = new FormData();
+    fd.append("file", f);
+    var res = await fetch("/analyze-image", { method: "POST", body: fd });
+    if (!res.ok) {
+      var detail = "";
+      try { detail = (await res.json()).detail || ""; } catch (e) {}
+      throw new Error(detail || ("Server error " + res.status));
+    }
+    var r = await res.json();
+    document.getElementById("msg").value = r.text || "";
+    currentImage = { sha: r.image_sha256, identifiers: r.identifiers || {} };
+    if (!r.text) {
+      alert("No text could be read from this image. Try a clearer screenshot, or type the message.");
+      document.getElementById("resultCard").style.display = "block";
+      document.getElementById("result").innerHTML =
+        '<p class="muted">No text found. Image fingerprint: <span class="hash">' +
+        esc(r.image_sha256) + '</span></p>';
+      document.getElementById("idsBox").innerHTML = "";
+      document.getElementById("btnSave").disabled = true;
+    } else {
+      renderAnalysis(r.analysis);
+      renderIdentifiers(r.identifiers);
+    }
+  } catch (e) {
+    alert("Could not read screenshot: " + e.message);
+  } finally {
+    btn.disabled = false; btn.textContent = "Read screenshot";
+  }
+}
+
+async function doAnalyze() {
+  var text = document.getElementById("msg").value.trim();
+  if (!text) { alert("Please paste a message or upload a screenshot first."); return; }
+  var btn = document.getElementById("btnAnalyze");
+  btn.disabled = true; btn.textContent = "Analyzing...";
+  try {
+    var r = await api("/analyze", "POST", { text: text });
+    renderAnalysis(r);
+  } catch (e) {
+    alert("Could not analyze: " + e.message);
+  } finally {
+    btn.disabled = false; btn.textContent = "Analyze";
+  }
+}
+
+async function doSave() {
+  var text = document.getElementById("msg").value.trim();
+  if (!text) return;
+  try {
+    var r;
+    if (currentImage) {
+      r = await api("/vault/image", "POST", {
+        text: text,
+        image_sha256: currentImage.sha,
+        identifiers: currentImage.identifiers
+      });
+    } else {
+      r = await api("/vault", "POST", { text: text });
+    }
+    document.getElementById("verifyMsg").innerHTML =
+      '<span class="ok">Saved to vault.</span> Hash: <span class="hash">' +
+      esc(r.hash || "") + '</span>';
+    await loadVault();
+  } catch (e) {
+    alert("Could not save: " + e.message);
+  }
+}
+
+async function doVerify() {
+  var el = document.getElementById("verifyMsg");
+  try {
+    var r = await api("/vault/verify");
+    if (r.ok) {
+      el.innerHTML = '<span class="ok">Vault intact.</span> Items checked: ' +
+                     esc(r.items_checked);
+    } else {
+      el.innerHTML = '<span class="bad">TAMPERING DETECTED</span> at evidence id ' +
+                     esc(r.tampered_at_id);
+    }
+  } catch (e) {
+    el.textContent = "Could not verify: " + e.message;
+  }
+}
+
+async function loadVault() {
+  var box = document.getElementById("vaultList");
+  try {
+    var items = await api("/vault");
+    if (!Array.isArray(items) || items.length === 0) {
+      box.innerHTML = '<p class="muted">No evidence saved yet.</p>';
+      return;
+    }
+    box.innerHTML = items.map(function (it) {
+      return '<div class="ev"><b>#' + esc(it.id) + '</b> ' +
+        '<span class="badge sev-' + esc(it.severity) + '" style="font-size:.7rem;padding:2px 8px">' +
+        esc(it.severity) + '</span> <span class="muted">' + esc(it.created_at) + '</span>' +
+        '<div>' + esc(it.content) + '</div>' +
+        '<div class="hash">hash: ' + esc(it.hash) + '</div></div>';
+    }).join("");
+  } catch (e) {
+    box.innerHTML = '<p class="bad">Could not load vault: ' + esc(e.message) + '</p>';
+  }
+}
+
+function downloadReport() {
+  window.open("/report", "_blank");
+}
+
+loadVault();
+</script>
+</body>
+</html>
