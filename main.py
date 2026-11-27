@@ -1,3 +1,8 @@
+import json
+import os
+import re
+from datetime import datetime, timezone
+
 from fastapi import FastAPI, File, UploadFile, HTTPException
 from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel
@@ -11,6 +16,8 @@ import vault
 app = FastAPI(title="SheShield")
 
 MAX_BYTES = 8 * 1024 * 1024
+ANCHOR_FILE = "anchors.json"
+TX_RE = re.compile(r"^0x[0-9a-fA-F]{64}$")
 
 
 class Msg(BaseModel):
@@ -21,6 +28,28 @@ class ImgEvidence(BaseModel):
     text: str
     image_sha256: str
     identifiers: dict = {}
+
+
+class AnchorIn(BaseModel):
+    tx_hash: str
+    vault_hash: str
+
+
+def _load_anchors():
+    if not os.path.exists(ANCHOR_FILE):
+        return []
+    try:
+        with open(ANCHOR_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return []
+
+
+def _latest_vault_hash():
+    items = vault.list_all()
+    if not items:
+        return None
+    return max(items, key=lambda i: i.get("id", 0)).get("hash")
 
 
 @app.get("/")
@@ -96,9 +125,37 @@ def verify_evidence():
     return vault.verify_all()
 
 
+@app.get("/vault/latest-hash")
+def latest_hash():
+    return {"hash": _latest_vault_hash()}
+
+
+@app.post("/anchor")
+def save_anchor(a: AnchorIn):
+    if not TX_RE.match(a.tx_hash):
+        raise HTTPException(400, "Invalid transaction hash.")
+    anchors = _load_anchors()
+    anchors.append({
+        "tx_hash": a.tx_hash,
+        "vault_hash": a.vault_hash,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    })
+    with open(ANCHOR_FILE, "w", encoding="utf-8") as f:
+        json.dump(anchors, f)
+    return anchors[-1]
+
+
+@app.get("/anchor")
+def get_anchor():
+    anchors = _load_anchors()
+    return {"anchor": anchors[-1] if anchors else None}
+
+
 @app.get("/report")
 def report():
-    pdf = build_report(vault.list_all(), vault.verify_all())
+    anchors = _load_anchors()
+    tx = anchors[-1]["tx_hash"] if anchors else None
+    pdf = build_report(vault.list_all(), vault.verify_all(), tx)
     return Response(
         content=pdf,
         media_type="application/pdf",

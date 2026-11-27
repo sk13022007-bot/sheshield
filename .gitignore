@@ -3,3 +3,4 @@ venv/
 .env
 vault.db
 tamper_backup.json
+anchors.json
