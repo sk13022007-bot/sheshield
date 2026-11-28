@@ -28,10 +28,10 @@ try:
 except Exception:
     pass
 
-SEV_COLORS = {"none": "#2e9e5b", "low": "#d9a400",
-              "medium": "#e07b00", "high": "#d62839"}
+SEV_COLORS = {"none": "#3E7A5E", "low": "#8A6414",
+              "medium": "#A4501A", "high": "#A2222E"}
 SEV_RANK = {"none": 0, "low": 1, "medium": 2, "high": 3}
-BRAND = colors.HexColor("#7b3fbf")
+BRAND = colors.HexColor("#3F1634")
 
 title_style = ParagraphStyle("title", fontName=FONT_BOLD, fontSize=20,
                              textColor=BRAND, spaceAfter=2)
@@ -85,11 +85,11 @@ def build_report(items, integrity, anchor=None):
     if integrity and integrity.get("ok"):
         integ_text = ("PASSED: %s item(s) checked, no changes detected since saving."
                       % integrity.get("items_checked", len(items)))
-        integ_color = "#2e9e5b"
+        integ_color = "#3E7A5E"
     else:
         integ_text = ("FAILED: record #%s was modified after saving."
                       % (integrity or {}).get("tampered_at_id", "?"))
-        integ_color = "#d62839"
+        integ_color = "#A2222E"
 
     story.append(Paragraph("1. Summary", h_style))
     rows = [
@@ -107,7 +107,7 @@ def build_report(items, integrity, anchor=None):
     t = Table(rows, colWidths=[40 * mm, 134 * mm])
     t.setStyle(TableStyle([
         ("VALIGN", (0, 0), (-1, -1), "TOP"),
-        ("LINEBELOW", (0, 0), (-1, -1), 0.4, colors.HexColor("#e6dff0")),
+        ("LINEBELOW", (0, 0), (-1, -1), 0.4, colors.HexColor("#E6DED7")),
         ("TOPPADDING", (0, 0), (-1, -1), 4),
         ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
     ]))
@@ -126,8 +126,8 @@ def build_report(items, integrity, anchor=None):
                          _p(it.get("score", ""), body)])
         tl = Table(data, colWidths=[14 * mm, 70 * mm, 32 * mm, 25 * mm], repeatRows=1)
         style = [
-            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#f3ecfa")),
-            ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#e6dff0")),
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#F2EDE8")),
+            ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#E6DED7")),
             ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
         ]
         for i, it in enumerate(items, start=1):

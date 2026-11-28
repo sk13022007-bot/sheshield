@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 
 from fastapi import FastAPI, File, UploadFile, HTTPException
 from fastapi.responses import FileResponse, Response
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 import pytesseract
 
@@ -14,6 +15,9 @@ from report import build_report
 import vault
 
 app = FastAPI(title="SheShield")
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+app.mount("/static", StaticFiles(directory=os.path.join(BASE_DIR, "static")), name="static")
 
 MAX_BYTES = 8 * 1024 * 1024
 ANCHOR_FILE = "anchors.json"
