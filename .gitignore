@@ -1,6 +1,10 @@
 __pycache__/
 venv/
 .env
-vault.db
+*.db
+*.db-journal
 tamper_backup.json
 anchors.json
+.pytest_cache/
+node_modules/
+contracts/deployment.sepolia.json

@@ -1,0 +1,551 @@
+{
+  "dataset": {
+    "total": 666,
+    "splits": {
+      "train": 380,
+      "val": 122,
+      "test": 164
+    },
+    "by_class": {
+      "benign": 86,
+      "harassment_abuse": 26,
+      "cyberstalking_contact": 28,
+      "sextortion": 113,
+      "blackmail_extortion": 95,
+      "threat": 63,
+      "impersonation": 44,
+      "romance_scam": 59,
+      "financial_scam": 95,
+      "phishing": 27,
+      "coercive_manipulation": 30
+    },
+    "by_language": {
+      "en": 195,
+      "hinglish": 153,
+      "hi": 108,
+      "kn": 92,
+      "kanglish": 118
+    },
+    "templates": 242,
+    "cross_split_exact_duplicates": 0
+  },
+  "validation": {
+    "n": 122,
+    "accuracy": 0.566,
+    "by_category": {
+      "benign": {
+        "precision": 0.176,
+        "recall": 1.0,
+        "f1": 0.3,
+        "support": 6
+      },
+      "harassment_abuse": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0,
+        "support": 2
+      },
+      "cyberstalking_contact": {
+        "precision": 0.2,
+        "recall": 0.25,
+        "f1": 0.222,
+        "support": 4
+      },
+      "sextortion": {
+        "precision": 0.696,
+        "recall": 0.696,
+        "f1": 0.696,
+        "support": 23
+      },
+      "blackmail_extortion": {
+        "precision": 0.417,
+        "recall": 0.25,
+        "f1": 0.312,
+        "support": 20
+      },
+      "threat": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0,
+        "support": 16
+      },
+      "impersonation": {
+        "precision": 1.0,
+        "recall": 0.8,
+        "f1": 0.889,
+        "support": 10
+      },
+      "romance_scam": {
+        "precision": 0.857,
+        "recall": 1.0,
+        "f1": 0.923,
+        "support": 12
+      },
+      "financial_scam": {
+        "precision": 1.0,
+        "recall": 0.737,
+        "f1": 0.848,
+        "support": 19
+      },
+      "phishing": {
+        "precision": 1.0,
+        "recall": 0.75,
+        "f1": 0.857,
+        "support": 4
+      },
+      "coercive_manipulation": {
+        "precision": 0.667,
+        "recall": 0.667,
+        "f1": 0.667,
+        "support": 6
+      }
+    },
+    "confusion_matrix": {
+      "labels": [
+        "benign",
+        "harassment_abuse",
+        "cyberstalking_contact",
+        "sextortion",
+        "blackmail_extortion",
+        "threat",
+        "impersonation",
+        "romance_scam",
+        "financial_scam",
+        "phishing",
+        "coercive_manipulation"
+      ],
+      "matrix": [
+        [
+          6,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          2
+        ],
+        [
+          3,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          6,
+          0,
+          0,
+          16,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          4,
+          0,
+          4,
+          7,
+          5,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          9,
+          1,
+          0,
+          0,
+          6,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          8,
+          2,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          12,
+          0,
+          0,
+          0
+        ],
+        [
+          5,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          14,
+          0,
+          0
+        ],
+        [
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          3,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          2,
+          0,
+          0,
+          0,
+          0,
+          4
+        ]
+      ]
+    },
+    "by_language": {
+      "en": {
+        "n": 43,
+        "accuracy": 0.581,
+        "macro_f1": 0.5
+      },
+      "hinglish": {
+        "n": 32,
+        "accuracy": 0.531,
+        "macro_f1": 0.468
+      },
+      "hi": {
+        "n": 22,
+        "accuracy": 0.455,
+        "macro_f1": 0.375
+      },
+      "kn": {
+        "n": 1,
+        "note": "support too low to report"
+      },
+      "kanglish": {
+        "n": 24,
+        "accuracy": 0.667,
+        "macro_f1": 0.5
+      }
+    },
+    "macro_f1": 0.52
+  },
+  "test": {
+    "n": 164,
+    "accuracy": 0.463,
+    "by_category": {
+      "benign": {
+        "precision": 0.263,
+        "recall": 0.833,
+        "f1": 0.4,
+        "support": 12
+      },
+      "harassment_abuse": {
+        "precision": 0.333,
+        "recall": 0.125,
+        "f1": 0.182,
+        "support": 8
+      },
+      "cyberstalking_contact": {
+        "precision": 0.4,
+        "recall": 0.571,
+        "f1": 0.471,
+        "support": 7
+      },
+      "sextortion": {
+        "precision": 0.833,
+        "recall": 0.357,
+        "f1": 0.5,
+        "support": 28
+      },
+      "blackmail_extortion": {
+        "precision": 0.386,
+        "recall": 0.654,
+        "f1": 0.486,
+        "support": 26
+      },
+      "threat": {
+        "precision": 0.444,
+        "recall": 0.25,
+        "f1": 0.32,
+        "support": 16
+      },
+      "impersonation": {
+        "precision": 0.5,
+        "recall": 0.2,
+        "f1": 0.286,
+        "support": 10
+      },
+      "romance_scam": {
+        "precision": 0.545,
+        "recall": 0.261,
+        "f1": 0.353,
+        "support": 23
+      },
+      "financial_scam": {
+        "precision": 1.0,
+        "recall": 0.737,
+        "f1": 0.848,
+        "support": 19
+      },
+      "phishing": {
+        "precision": 1.0,
+        "recall": 0.375,
+        "f1": 0.545,
+        "support": 8
+      },
+      "coercive_manipulation": {
+        "precision": 0.312,
+        "recall": 0.714,
+        "f1": 0.435,
+        "support": 7
+      }
+    },
+    "confusion_matrix": {
+      "labels": [
+        "benign",
+        "harassment_abuse",
+        "cyberstalking_contact",
+        "sextortion",
+        "blackmail_extortion",
+        "threat",
+        "impersonation",
+        "romance_scam",
+        "financial_scam",
+        "phishing",
+        "coercive_manipulation"
+      ],
+      "matrix": [
+        [
+          10,
+          0,
+          0,
+          0,
+          2,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          1,
+          1,
+          0,
+          0,
+          0,
+          2,
+          0,
+          0,
+          0,
+          0,
+          4
+        ],
+        [
+          1,
+          0,
+          4,
+          0,
+          2,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          10,
+          18,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          4,
+          0,
+          1,
+          1,
+          17,
+          3,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          7,
+          0,
+          3,
+          0,
+          1,
+          4,
+          0,
+          0,
+          0,
+          0,
+          1
+        ],
+        [
+          1,
+          0,
+          2,
+          1,
+          4,
+          0,
+          2,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          13,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          6,
+          0,
+          0,
+          4
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          5,
+          14,
+          0,
+          0
+        ],
+        [
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          2,
+          0,
+          0,
+          3,
+          2
+        ],
+        [
+          0,
+          2,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          5
+        ]
+      ]
+    },
+    "by_language": {
+      "en": {
+        "n": 37,
+        "accuracy": 0.297,
+        "macro_f1": 0.259
+      },
+      "hinglish": {
+        "n": 33,
+        "accuracy": 0.788,
+        "macro_f1": 0.767
+      },
+      "hi": {
+        "n": 25,
+        "accuracy": 0.64,
+        "macro_f1": 0.475
+      },
+      "kn": {
+        "n": 37,
+        "accuracy": 0.27,
+        "macro_f1": 0.135
+      },
+      "kanglish": {
+        "n": 32,
+        "accuracy": 0.406,
+        "macro_f1": 0.561
+      }
+    },
+    "macro_f1": 0.439
+  }
+}
