@@ -1,10 +1,9 @@
 /* SheShield front end. Talks to the existing FastAPI endpoints; no data is invented here. */
 
-// ====== PASTE YOUR SEPOLIA CONTRACT ADDRESS BETWEEN THE QUOTES ======
-var ANCHOR_CONTRACT = "0xe3Ae90d99E429e3b7B577cD91B4eAB2EF990f7DF";
-// =====================================================================
+// Contract address, ABI and network come from the server (/config), set by the SHESHIELD_CONTRACT_ADDRESS env var.
 var SEPOLIA_CHAIN = "0xaa36a7";
-var ANCHOR_SELECTOR = "0x921ee94f"; // anchor(string)
+var SEL_ANCHOR = "0xeecdf927";     // anchor(bytes32)
+var SEL_GET = "0x7feb51d9";        // getAnchor(bytes32)
 var MAX_IMAGE_BYTES = 8 * 1024 * 1024;
 
 var $ = function (s, r) { return (r || document).querySelector(s); };
@@ -15,7 +14,7 @@ function esc(s) {
     return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
   });
 }
-function ic(name, cls) { return '<svg class="ic ' + (cls || "") + '" aria-hidden="true"><use href="#i-' + name + '"/></svg>'; }
+function ic(name, cls) { var w = /ic-lg/.test(cls || "") ? 22 : /ic-sm/.test(cls || "") ? 15 : 18; return '<svg width="' + w + '" height="' + w + '" class="ic ' + (cls || "") + '" aria-hidden="true"><use href="#i-' + name + '"/></svg>'; }
 function shortHash(h) { return h && h.length > 20 ? h.slice(0, 10) + "…" + h.slice(-8) : (h || ""); }
 function fmtDate(iso) {
   var d = new Date(iso);
@@ -34,12 +33,12 @@ var SEV = {
 function sevOf(s) { return SEV[s] ? s : "none"; }
 function sevPill(s) { s = sevOf(s); return '<span class="pill ' + SEV[s].pill + '">' + SEV[s].label + "</span>"; }
 var CATEGORY = {
-  blackmail: "Blackmail or sextortion",
-  threat: "Threat of violence",
-  stalking: "Stalking or obsessive contact",
-  sexual_harassment: "Sexual harassment",
-  abuse: "Abusive language"
+  sextortion: "Sextortion (intimate-media threat)", blackmail_extortion: "Blackmail or extortion", threat: "Threat of violence",
+  harassment_abuse: "Harassment or abusive remarks", cyberstalking_contact: "Cyberstalking or repeated contact",
+  impersonation: "Impersonation", romance_scam: "Romance scam pattern", financial_scam: "Financial scam pattern",
+  phishing: "Phishing pattern", coercive_manipulation: "Coercive control", benign: "No threat pattern found"
 };
+var LANG = { en: "English", hi: "Hindi", kn: "Kannada", hinglish: "Hinglish", kanglish: "Kanglish" };
 
 /* ---------- State ---------- */
 var state = {
@@ -56,12 +55,15 @@ var state = {
   analysis: null,
   analysisStale: false,
   pendingFile: null,
-  reportTs: null
+  reportTs: null,
+  config: null,
+  auth: { authenticated: false },
+  intel: null
 };
 
 /* ---------- API ---------- */
 async function api(path, method, body) {
-  var opts = { method: method || "GET", headers: {} };
+  var opts = { method: method || "GET", headers: {}, credentials: "same-origin" };
   if (body) { opts.headers["Content-Type"] = "application/json"; opts.body = JSON.stringify(body); }
   var res;
   try { res = await fetch(path, opts); }
@@ -70,7 +72,10 @@ async function api(path, method, body) {
   if (!res.ok) {
     var detail = "";
     try { detail = (await res.json()).detail || ""; } catch (e) {}
-    throw new Error(detail || ("The server returned an error (" + res.status + ")."));
+    var err = new Error(detail || ("The server returned an error (" + res.status + ")."));
+    err.status = res.status;
+    if (res.status === 401 && path.indexOf("/auth/") !== 0) { state.auth = { authenticated: false }; if (window.showLock) showLock("expired"); }
+    throw err;
   }
   return res.json();
 }
@@ -133,7 +138,7 @@ document.addEventListener("click", function (e) {
 });
 
 /* ---------- Router ---------- */
-var ROUTES = ["overview", "scan", "vault", "proof", "reports", "help"];
+var ROUTES = ["overview", "scan", "vault", "proof", "reports", "help", "intel", "legal", "emergency", "contacts", "insights", "settings", "more"];
 function route() {
   var r = (location.hash.replace(/^#\/?/, "") || "overview");
   if (ROUTES.indexOf(r) < 0) r = "overview";
@@ -141,13 +146,16 @@ function route() {
   $$("[data-route]").forEach(function (a) {
     if (a.dataset.route === r) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current");
   });
-  var titles = { overview: "Overview", scan: "Check a message", vault: "Evidence vault", proof: "Blockchain proof", reports: "Reports", help: "Get help" };
+  var titles = { overview: "Overview", scan: "Check a message", vault: "Evidence vault", proof: "Blockchain proof", reports: "Reports", help: "Get help", intel: "Incident intelligence", legal: "Legal action & reporting", emergency: "Emergency support", contacts: "Trusted contact", insights: "Safety insights", settings: "Settings & privacy", more: "All sections" };
   document.title = titles[r] + " – SheShield";
   window.scrollTo(0, 0);
   if (r === "scan" && state.pendingFile) { var f = state.pendingFile; state.pendingFile = null; setFile(f); }
   if (r === "reports") renderReportState();
   if (r === "scan") renderResult();
-  if (r === "vault" || r === "proof" || r === "overview" || r === "reports") refreshData();
+  if (state.auth.authenticated) {
+    if (r === "vault" || r === "proof" || r === "overview" || r === "reports" || r === "intel" || r === "legal") refreshData();
+    if (window.VIEW_HOOKS && VIEW_HOOKS[r]) VIEW_HOOKS[r]();
+  }
 }
 window.addEventListener("hashchange", route);
 
@@ -236,7 +244,7 @@ function renderOverview() {
   }
   var anchorTxt;
   if (!state.anchor) anchorTxt = '<span class="pill p-neutral">Not anchored</span>';
-  else if (state.chain.status === "confirmed") anchorTxt = '<span class="pill p-none">Verified on-chain</span>';
+  else if (state.chain.status === "verified") anchorTxt = '<span class="pill p-none">Verified on-chain</span>'; else if (state.chain.status === "confirmed") anchorTxt = '<span class="pill p-info">Confirmed, not yet verified</span>';
   else anchorTxt = '<span class="pill p-info">Submitted, unchecked</span>';
   html += '<dl class="kv" style="margin:0">' +
     '<div><dt>Evidence saved</dt><dd>' + n + "</dd></div>" +
@@ -270,6 +278,7 @@ $("#tabTxt").onclick = function () { setMode("txt"); };
 
 function setFile(f) {
   if (!f) return;
+  state.fromVoice = false;
   if (!/^image\//.test(f.type)) { toast("That file is not an image. Choose a PNG or JPG screenshot.", "error"); return; }
   if (f.size > MAX_IMAGE_BYTES) { toast("That image is " + fmtSize(f.size) + ". The limit is 8 MB. Try a smaller screenshot.", "error"); return; }
   state.file = f; state.image = null;
@@ -323,8 +332,9 @@ $("#btnRead").onclick = async function () {
   try {
     var fd = new FormData(); fd.append("file", state.file);
     var res;
-    try { res = await fetch("/analyze-image", { method: "POST", body: fd }); }
+    try { res = await fetch("/analyze-image", { method: "POST", body: fd, credentials: "same-origin" }); }
     catch (e) { showOffline(true); throw new Error("Can't reach the SheShield server. Make sure it is running, then try again."); }
+    if (res.status === 401) { state.auth = { authenticated: false }; showLock("expired"); throw new Error("Your vault locked. Unlock it and try again."); }
     if (!res.ok) {
       var detail = ""; try { detail = (await res.json()).detail || ""; } catch (e) {}
       throw new Error(detail || "The server returned an error (" + res.status + ").");
@@ -383,7 +393,7 @@ $("#btnSave").onclick = async function () {
   try {
     var r = withImg
       ? await api("/vault/image", "POST", { text: text, image_sha256: state.image.sha, identifiers: state.image.identifiers })
-      : await api("/vault", "POST", { text: text });
+      : await api(state.fromVoice ? "/vault/transcript" : "/vault", "POST", { text: text });
     toast("Saved to vault as record #" + r.id + ".", "success", { label: "View", run: function () { location.hash = "#/vault"; } });
     await refreshData();
   } catch (e) { toast("Could not save: " + e.message, "error"); }
@@ -391,17 +401,6 @@ $("#btnSave").onclick = async function () {
 };
 
 function revealResult() { if (window.innerWidth < 1100) { var r = $('#resultPanel'); if (r) r.scrollIntoView({ behavior: 'smooth', block: 'start' }); } }
-
-function recommendations(sev) {
-  var save = "Save this message to the evidence vault before you do anything else.";
-  var map = {
-    high: [save, "Do not reply or negotiate. Do not delete the chat.", "Report it: call <b>1930</b> or file at <b>cybercrime.gov.in</b>. If you feel unsafe right now, call <b>112</b>.", "Tell someone you trust."],
-    medium: [save, "Avoid replying, and keep the original chat.", "Consider reporting it at <b>cybercrime.gov.in</b> or calling <b>1930</b>.", "Block the sender only after the evidence is saved."],
-    low: ["Keep the chat. Save this message if the behaviour continues.", "Block or mute the sender after saving.", "If it escalates, report it at <b>cybercrime.gov.in</b>."],
-    none: ["No known harassment patterns matched. That does not mean the message is safe.", "If it still feels threatening or wrong, trust that and save it anyway.", "Never share money, OTPs or private photos with someone you do not trust."]
-  };
-  return map[sev];
-}
 
 function renderResult(loading) {
   var p = $("#resultPanel"), a = state.analysis;
@@ -426,47 +425,47 @@ function renderResult(loading) {
     $("#goTxt").onclick = function () { setMode("txt"); };
     return;
   }
-  var sev = sevOf(a.severity), score = Number(a.score) || 0;
-  var lead = {
-    none: "Our checks found no known harassment patterns in this text.",
-    low: "A few signs of unwanted or abusive behaviour were found.",
-    medium: "This message shows patterns that are commonly part of harassment.",
-    high: "This message shows serious patterns such as threats or blackmail."
-  }[sev];
+  var sev = sevOf(a.severity), score = Number(a.score) || 0, cat = a.category || "benign";
+  var lead = a.explanation || "";
   var markIcon = sev === "none" ? "check" : "alert";
   var html = "";
   if (state.analysisStale) html += '<div class="note warn" style="margin-bottom:16px">' + ic("alert", "ic-sm") + "<span>You changed the text. Analyze again to update this result.</span></div>";
-  html += '<div class="verdict v-' + sev + '"><div class="mark">' + ic(markIcon, "ic-lg") + "</div><div><h2>" + SEV[sev].label + "</h2><p>" + lead + "</p></div></div>";
+  if (a.emergency && a.emergency.sextortion) {
+    html += '<div class="note err emergency-note" style="margin-bottom:16px">' + ic("heart", "ic-sm") + '<span><b>You are not alone.</b> This looks like sextortion, which is a crime against you, not something you did wrong. <a href="#/emergency">Open Emergency support</a> for clear steps.</span></div>';
+  }
+  html += '<div class="verdict v-' + sev + '"><div class="mark">' + ic(markIcon, "ic-lg") + "</div><div><h2>" + SEV[sev].label + "</h2><p>" + esc(CATEGORY[cat] || cat) + "</p></div></div>";
+  html += '<p style="margin:14px 0 4px">' + esc(lead) + "</p>";
+  html += '<div class="chips" style="margin:10px 0 4px"><span class="pill p-neutral">Confidence: ' + esc(a.confidence || "n/a") + '</span><span class="pill p-neutral">Language: ' + esc(LANG[a.language] || a.language || "unknown") + "</span></div>";
   html += '<div class="meter"><div class="meter-top"><span>Risk score</span><span><b>' + score + "</b> / 100</span></div>" +
     '<div class="meter-track" role="meter" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + score + '" aria-label="Risk score"><div class="meter-fill f-' + sev + '" style="width:' + score + '%"></div></div>' +
     '<div class="meter-scale"><span>Low below 40</span><span>Concerning 40 to 69</span><span>High 70+</span></div></div>';
 
-  // Potential risks (rule-based)
-  var findings = a.findings || [];
-  html += '<div class="evidence-block"><header><h3>Patterns flagged</h3><span class="tag t-risk">Potential risk</span></header>';
-  if (findings.length) {
-    html += '<ul class="found-list">' + findings.map(function (f) {
-      var cat = f && f.category ? (CATEGORY[f.category] || f.category) : "Flagged";
-      var why = f && f.reason ? f.reason : (typeof f === "string" ? f : "");
-      return "<li><b>" + esc(cat) + "</b><span>" + esc(why) + "</span></li>";
+  var inds = a.indicators || [];
+  html += '<div class="evidence-block"><header><h3>Why this was flagged</h3><span class="tag t-risk">Indicators</span></header>';
+  if (inds.length) {
+    html += '<ul class="found-list">' + inds.map(function (f) {
+      return "<li><b>" + esc(f.label) + "</b><span class='mono small'>" + esc(f.matched) + "</span></li>";
     }).join("") + "</ul>";
-  } else html += '<p class="muted">No rule-based patterns matched.</p>';
+  } else html += '<p class="muted">No indicators matched.</p>';
+  if ((a.context || []).length) html += '<ul class="ctx-list">' + a.context.map(function (c) { return "<li>" + esc(c) + "</li>"; }).join("") + "</ul>";
+  if ((a.secondary_categories || []).length) html += '<p class="small muted">Also partly matched: ' + a.secondary_categories.map(function (c) { return esc(CATEGORY[c] || c); }).join(", ") + ".</p>";
   html += "</div>";
 
-  // Uncertain (model)
-  if (a.ml_probability !== undefined) {
-    var pct = Math.round(a.ml_probability * 100);
-    html += '<div class="evidence-block"><header><h3>Language model estimate</h3><span class="tag t-uncertain">Uncertain</span></header>' +
-      '<div class="uncertain-box"><b>' + pct + '%</b> estimated likelihood of harassment.<br><span class="muted small">A statistical guess from a small trained model. It can be wrong in either direction and is shown only as a second opinion.</span></div></div>';
+  if (a.ml) {
+    html += '<div class="evidence-block"><header><h3>Statistical model</h3><span class="tag t-uncertain">Second opinion</span></header>' +
+      '<div class="uncertain-box">Closest category: <b>' + esc(CATEGORY[a.ml.top] || a.ml.top) + "</b> (" + Math.round(a.ml.probability * 100) + '%).<br><span class="muted small">A small model trained on a synthetic, template-based dataset. It supports the rules and can be wrong. See MODEL_CARD.md for measured accuracy.</span></div></div>';
   }
 
-  // Detected details (from screenshot)
+  // identifiers: screenshot (server-extracted) or typed
   if (state.image && a.fromImage) html += identifiersHTML(state.image.identifiers);
+  else if ((a.identifiers || []).length) {
+    html += '<div class="evidence-block"><header><h3>Identifiers in this text</h3><span class="tag t-detected">Detected</span></header>' +
+      a.identifiers.map(function (i) { return '<div class="detected-row"><span class="k">' + esc(i.kind) + '</span><span class="v">' + esc(i.raw) + "</span></div>"; }).join("") + "</div>";
+  }
 
-  // Next steps
   html += '<div class="evidence-block"><header><h3>What you can do</h3></header><ol class="actions">' +
-    recommendations(sev).map(function (r) { return "<li>" + r + "</li>"; }).join("") + "</ol>" +
-    '<div class="btn-row" style="margin-top:18px"><a class="btn btn-secondary btn-sm" href="#/help">See reporting steps</a></div></div>';
+    (a.next_steps || []).map(function (r) { return "<li>" + esc(r) + "</li>"; }).join("") + "</ol>" +
+    '<div class="btn-row" style="margin-top:18px"><a class="btn btn-secondary btn-sm" href="#/legal">Legal action &amp; reporting</a><a class="btn btn-ghost btn-sm" href="#/help">Helplines</a></div></div>';
   p.innerHTML = html;
 }
 
@@ -511,9 +510,13 @@ function entryHTML(it, opts) {
   h += '<article class="panel entry"><div class="entry-top"><span class="id">Record #' + esc(it.id) + "</span>" + sevPill(it.severity) +
     '<time datetime="' + esc(it.created_at) + '" title="' + esc(it.created_at) + '">' + esc(fmtDate(it.created_at)) + "</time></div>";
   h += '<p class="snippet">' + esc(c.text) + "</p>";
+  var mt = it.meta || {};
   h += '<div class="chips"><span class="pill ' + st.pill + '">' + esc(st.label) + "</span>";
+  if (mt.category && mt.category !== "benign") h += '<span class="pill p-neutral">' + esc(CATEGORY[mt.category] || mt.category) + "</span>";
+  if (mt.language) h += '<span class="pill p-neutral">' + esc(LANG[mt.language] || mt.language) + "</span>";
+  if (it.readable === false) h += '<span class="pill p-high">Could not be decrypted</span>';
   if (c.sha) h += '<span class="pill p-neutral pill-ic">' + ic("image", "ic-sm") + "&nbsp;Screenshot fingerprint</span>";
-  if (anchored) h += state.chain.status === "confirmed"
+  if (anchored) h += state.chain.status === "verified"
     ? '<span class="pill p-none pill-ic">' + ic("chain", "ic-sm") + "&nbsp;Anchored, verified on-chain</span>"
     : '<span class="pill p-info pill-ic">' + ic("chain", "ic-sm") + "&nbsp;Included in anchor, unchecked</span>";
   h += "</div>";
@@ -524,9 +527,11 @@ function entryHTML(it, opts) {
     h += "<div><dt>Risk score</dt><dd>" + esc(it.score) + " / 100</dd></div>";
     if (c.sha) h += "<div><dt>Screenshot SHA-256</dt><dd class='hash-line'><span class='mono'>" + esc(c.sha) + "</span><button class='copy' data-copy='" + esc(c.sha) + "' aria-label='Copy screenshot fingerprint'>" + ic("copy", "ic-sm") + "</button></dd></div>";
     if (c.ids) h += "<div><dt>Details found</dt><dd class='mono'>" + esc(c.ids) + "</dd></div>";
+    if (mt.indicators && mt.indicators.length) h += "<div><dt>Indicators</dt><dd>" + mt.indicators.map(function (x) { return esc(x.label); }).join("; ") + "</dd></div>";
+    if (mt.identifiers && mt.identifiers.length) h += "<div><dt>Normalised identifiers</dt><dd class='mono'>" + mt.identifiers.map(function (x) { return esc(x.kind + ": " + x.value); }).join("<br>") + "</dd></div>";
     h += "<div><dt>Record hash</dt><dd class='hash-line'><span class='mono'>" + esc(it.hash) + "</span><button class='copy' data-copy='" + esc(it.hash) + "' aria-label='Copy record hash'>" + ic("copy", "ic-sm") + "</button></dd></div>";
     h += "<div><dt>Linked to</dt><dd class='mono'>" + (prev ? "Record #" + esc(prev.id) + " · " + esc(prev.hash) : "Start of chain (no earlier record)") + "</dd></div>";
-    h += "</dl></details>";
+    h += "</dl><div class='btn-row' style='margin-top:12px'><a class='btn btn-secondary btn-sm' href='#/legal' data-ev='" + esc(it.id) + "'>Legal options</a><button class='btn btn-secondary btn-sm' type='button' data-alert='" + esc(it.id) + "'>Alert trusted contact</button></div></details>";
   }
   return h + "</article></li>";
 }
@@ -546,7 +551,7 @@ function renderVault() {
   else {
     var behind = n - 1 - anchorIndex();
     anchorLbl = behind === 0 ? "Covers all evidence" : behind + " newer item" + (behind === 1 ? "" : "s") + " not covered";
-    anchorSub = state.chain.status === "confirmed" ? "Verified on Sepolia" : "Transaction recorded, not yet checked on-chain";
+    anchorSub = state.chain.status === "verified" ? "Verified on Sepolia" : "Transaction recorded, not yet checked on-chain";
   }
   top.innerHTML =
     '<div><div class="lbl">Records saved</div><div class="big">' + n + '</div><div class="sub">' + (n ? "Latest: " + esc(fmtDate(state.items[n - 1].created_at)) : "Nothing saved yet") + "</div></div>" +
@@ -587,45 +592,55 @@ $("#btnVerify").onclick = async function () {
 };
 
 /* ======================= BLOCKCHAIN ======================= */
-function wordHex(n) { return n.toString(16).padStart(64, "0"); }
-function encodeAnchor(str) {
-  var bytes = new TextEncoder().encode(str), hex = "";
-  for (var i = 0; i < bytes.length; i++) hex += bytes[i].toString(16).padStart(2, "0");
-  var padded = hex;
-  while (padded.length % 64 !== 0) padded += "0";
-  return ANCHOR_SELECTOR + wordHex(32) + wordHex(bytes.length) + padded;
-}
-function contractOK() { return /^0x[0-9a-fA-F]{40}$/.test(ANCHOR_CONTRACT); }
+/* Four distinct states, each backed by something different:
+   1 stored locally   : the hash exists in your vault
+   2 submitted        : your wallet returned a transaction hash (nothing read back yet)
+   3 confirmed        : the receipt was read from the network: mined, succeeded, sent to the SheShield contract
+   4 verified         : getAnchor(hash) was read from the contract and the hash matches your current vault records */
+function contractAddr() { return state.config && state.config.contract_address; }
+function contractOK() { return /^0x[0-9a-fA-F]{40}$/.test(contractAddr() || ""); }
 function etherscanTx(h) { return "https://sepolia.etherscan.io/tx/" + h; }
 function shortAddr(a) { return a ? a.slice(0, 6) + "…" + a.slice(-4) : ""; }
+function encodeAnchor(hash) { return SEL_ANCHOR + hash.toLowerCase(); }
+function encodeGet(hash) { return SEL_GET + hash.toLowerCase(); }
+function decodeGet(hex) {
+  var d = String(hex || "").replace(/^0x/, "");
+  if (d.length < 256) return null;
+  return { exists: parseInt(d.slice(0, 64), 16) !== 0, anchorer: "0x" + d.slice(88, 128), timestamp: parseInt(d.slice(128 + 32, 192), 16), block: parseInt(d.slice(192 + 32, 256), 16) };
+}
+function chainStage() {
+  // returns 1..4 for the stepper
+  if (!state.latestHash) return 0;
+  if (!state.anchor) return 1;
+  var c = state.chain.status;
+  if (c === "verified") return 4;
+  if (c === "confirmed") return 3;
+  return 2;
+}
 
 function renderProof() {
   var st = $("#proofStatus"), steps = $("#proofSteps"), box = $("#proofAnchor");
   if (!st) return;
   if (!state.loaded) { st.innerHTML = '<div class="panel-pad"><div class="skel skel-line"></div><div class="skel skel-line" style="width:60%"></div></div>'; return; }
   var a = state.anchor, c = state.chain, ai = anchorIndex(), n = state.items.length;
-  var s = { cls: "", icon: "chain", title: "", text: "" };
-  if (!a) {
-    s = { cls: "", icon: "chain", title: "Not anchored yet", text: n ? "Your vault has not been published to a blockchain. Anchoring is optional but adds an independent, public timestamp." : "Save some evidence first. Then you can anchor its fingerprint." };
-  } else if (c.status === "confirmed") {
-    s = { cls: "s-ok", icon: "check", title: "Verified on Sepolia", text: "Your wallet read this transaction from the blockchain. It succeeded, went to the SheShield contract, and contains exactly the vault hash recorded below." };
-  } else if (c.status === "pending") {
-    s = { cls: "s-info", icon: "clock", title: "Waiting for confirmation", text: "The network has seen this transaction but it is not in a block yet. Check again in a minute." };
-  } else if (c.status === "mismatch") {
-    s = { cls: "s-bad", icon: "alert", title: "Transaction does not match", text: "The transaction exists, but its contract or data differs from what SheShield recorded. Do not treat this as proof." };
-  } else if (c.status === "failed") {
-    s = { cls: "s-bad", icon: "x", title: "Transaction failed", text: "The transaction was included in a block but reverted, so nothing was recorded. Anchor again." };
-  } else if (c.status === "notfound") {
-    s = { cls: "s-warn", icon: "alert", title: "Transaction not found", text: "Your wallet's network has no record of this transaction. It may still be propagating, may have been dropped, or your wallet may be on a different network." };
-  } else if (c.status === "wrongnet") {
-    s = { cls: "s-warn", icon: "alert", title: "Wallet is on another network", text: "Switch your wallet to Sepolia test network, then check again." };
-  } else if (c.status === "nowallet") {
-    s = { cls: "s-warn", icon: "wallet", title: "Wallet needed to check", text: "A browser wallet such as MetaMask is needed to read the blockchain from here. You can also open the transaction on Etherscan below." };
-  } else if (c.status === "checking") {
-    s = { cls: "s-info", icon: "clock", title: "Checking the blockchain…", text: "Reading the transaction through your wallet." };
-  } else {
-    s = { cls: "s-info", icon: "info", title: "Submitted, not yet verified", text: "SheShield saved the transaction reference from your wallet, but has not read it back from the blockchain. Choose Check on blockchain to verify it." };
-  }
+  var s;
+  var T = {
+    none: { cls: "", icon: "chain", title: "Stored locally only", text: n ? "Your evidence fingerprint exists only in this vault. Anchoring is optional: it adds an independent, public timestamp on a test blockchain." : "Save some evidence first. Then you can anchor its fingerprint." },
+    submitted: { cls: "s-info", icon: "info", title: "Transaction submitted", text: "Your wallet returned a transaction reference. SheShield has not yet read it back from the blockchain. Choose Check on blockchain." },
+    pending: { cls: "s-info", icon: "clock", title: "Waiting for confirmation", text: "The network has seen this transaction but it is not in a block yet. Check again in a minute." },
+    confirmed: { cls: "s-info", icon: "check", title: "Transaction confirmed", text: "The receipt shows the transaction was mined and succeeded on Sepolia, sent to the SheShield contract. The stored fingerprint has not yet been read back from the contract." },
+    verified: { cls: "s-ok", icon: "check", title: "Hash verified on the blockchain", text: "The fingerprint was read from the SheShield contract on Sepolia and it matches a record in your vault, whose integrity check still passes." },
+    mismatch: { cls: "s-bad", icon: "alert", title: "Does not match", text: "Either the contract has no such fingerprint, or your vault no longer produces it (a record changed after anchoring). Do not treat this as proof." },
+    failed: { cls: "s-bad", icon: "x", title: "Transaction failed", text: "The transaction was mined but reverted, so nothing was recorded. Anchor again." },
+    notfound: { cls: "s-warn", icon: "alert", title: "Transaction not found", text: "Your wallet's network has no record of this transaction. It may still be propagating, or your wallet is on a different network." },
+    wrongnet: { cls: "s-warn", icon: "alert", title: "Wallet is on another network", text: "Switch your wallet to the Sepolia test network, then check again." },
+    nowallet: { cls: "s-warn", icon: "wallet", title: "Wallet needed to check", text: "A browser wallet such as MetaMask is needed to read the blockchain from here. You can also open the transaction on Etherscan, or use scripts/verify_anchor.py." },
+    checking: { cls: "s-info", icon: "clock", title: "Checking the blockchain…", text: "Reading the receipt and the contract through your wallet." },
+    nocontract: { cls: "s-warn", icon: "alert", title: "Contract address not configured", text: "The server has no deployed contract address. See README, section Blockchain, to deploy it and set SHESHIELD_CONTRACT_ADDRESS." }
+  };
+  if (!a) s = T.none;
+  else if (!contractOK()) s = T.nocontract;
+  else s = T[c.status] || T.submitted;
   var coverage = "";
   if (a) {
     if (ai < 0) coverage = '<div class="note warn" style="margin-top:12px">' + ic("alert", "ic-sm") + "<span>The anchored hash does not match any record in this vault.</span></div>";
@@ -638,30 +653,30 @@ function renderProof() {
     coverage + "</div></div>";
   if ($("#btnCheckChain")) $("#btnCheckChain").onclick = verifyOnChain;
 
-  // steps
-  var connected = !!state.wallet.account;
-  steps.innerHTML =
-    '<div class="' + (n ? "done" : "") + '"><span class="n">1</span><h3>Evidence saved</h3><p>' + (n ? n + " record" + (n === 1 ? "" : "s") + " ready." : "Save at least one item to the vault.") + "</p></div>" +
-    '<div class="' + (connected ? "done" : "") + '"><span class="n">2</span><h3>Connect a wallet</h3><p>' + (connected ? "Connected as " + esc(shortAddr(state.wallet.account)) + "." : "A wallet such as MetaMask signs the transaction. SheShield never sees your keys.") + "</p></div>" +
-    '<div class="' + (a ? "done" : "") + '"><span class="n">3</span><h3>Publish the fingerprint</h3><p>' + (a ? "Transaction reference saved." : "Confirm once in your wallet. Test coins only.") + "</p></div>";
+  var stage = chainStage(), connected = !!state.wallet.account;
+  var labels = [["Stored locally", "The fingerprint is in your vault."], ["Submitted", "Wallet returned a transaction hash."], ["Confirmed", "Receipt read: mined and succeeded."], ["Verified", "Hash read back from the contract and matched."]];
+  steps.innerHTML = labels.map(function (l, i) {
+    return '<div class="' + (stage > i ? "done" : "") + '"><span class="n">' + (i + 1) + "</span><h3>" + l[0] + "</h3><p>" + l[1] + "</p></div>";
+  }).join("");
 
-  // action box
   var h = "<h2 style='margin-bottom:6px'>Anchor your vault</h2>";
   h += "<p class='muted' style='margin-bottom:14px'>Fingerprint of your latest evidence record:</p>";
   if (state.latestHash) h += "<div class='hash-line' style='margin-bottom:16px'><span class='mono'>" + esc(state.latestHash) + "</span><button class='copy' data-copy='" + esc(state.latestHash) + "' aria-label='Copy hash'>" + ic("copy", "ic-sm") + "</button></div>";
   else h += "<div class='note' style='margin-bottom:16px'>" + ic("info", "ic-sm") + "<span>No evidence saved yet. <a href='#/scan'>Check a message</a> and save it first.</span></div>";
-  if (!contractOK()) h += "<div class='note err' style='margin-bottom:14px'>" + ic("alert", "ic-sm") + "<span>The contract address is not set in <span class='mono'>static/app.js</span>, so anchoring is unavailable.</span></div>";
+  if (!contractOK()) h += "<div class='note err' style='margin-bottom:14px'>" + ic("alert", "ic-sm") + "<span>No contract address is configured on the server, so anchoring is unavailable. Deploy <span class='mono'>contracts/SheShieldAnchor.sol</span> and set <span class='mono'>SHESHIELD_CONTRACT_ADDRESS</span> (see README).</span></div>";
   if (!window.ethereum) h += "<div class='note warn' style='margin-bottom:14px'>" + ic("wallet", "ic-sm") + "<span>No wallet found in this browser. Install MetaMask or open SheShield in a browser that has it.</span></div>";
   h += "<div class='btn-row'>";
   if (window.ethereum && !connected) h += "<button class='btn btn-secondary' id='btnConnect' type='button'>" + ic("wallet", "ic-sm") + "Connect wallet</button>";
   h += "<button class='btn btn-primary' id='btnAnchor' type='button'" + (state.latestHash && contractOK() && window.ethereum ? "" : " disabled") + ">" + ic("chain", "ic-sm") + (a ? "Anchor latest hash again" : "Anchor latest hash") + "</button></div>";
   if (connected) h += "<p class='small muted' style='margin-top:12px'>Wallet " + esc(shortAddr(state.wallet.account)) + " · " + (state.wallet.chainId === SEPOLIA_CHAIN ? "Sepolia test network" : "Not on Sepolia") + "</p>";
+  if (contractOK()) h += "<p class='small muted' style='margin-top:8px'>Contract <a class='mono' target='_blank' rel='noopener' href='" + esc(state.config.explorer + "/address/" + contractAddr()) + "'>" + esc(contractAddr()) + "</a> on " + esc(state.config.network) + "</p>";
   if (a) {
     h += "<hr class='rule'><dl class='facts' style='margin-top:0'>" +
       "<div><dt>Anchored hash</dt><dd class='hash-line'><span class='mono'>" + esc(a.vault_hash) + "</span></dd></div>" +
       "<div><dt>Transaction</dt><dd class='hash-line'><a class='mono' target='_blank' rel='noopener' href='" + esc(etherscanTx(a.tx_hash)) + "'>" + esc(a.tx_hash) + "</a></dd></div>" +
       "<div><dt>Submitted</dt><dd>" + esc(fmtDate(a.created_at)) + "</dd></div>" +
-      (c.status === "confirmed" && c.block ? "<div><dt>Block</dt><dd>" + esc(c.block) + "</dd></div>" : "") + "</dl>";
+      (c.block ? "<div><dt>Block</dt><dd>" + esc(c.block) + "</dd></div>" : "") +
+      (c.timestamp ? "<div><dt>On-chain timestamp</dt><dd>" + esc(fmtDate(new Date(c.timestamp * 1000).toISOString())) + "</dd></div>" : "") + "</dl>";
   }
   box.innerHTML = h;
   if ($("#btnConnect")) $("#btnConnect").onclick = connectWallet;
@@ -687,7 +702,7 @@ if (window.ethereum && window.ethereum.on) {
 }
 
 async function doAnchor() {
-  if (!contractOK()) { toast("Contract address is not set in static/app.js.", "error"); return; }
+  if (!contractOK()) { toast("No contract address is configured on the server.", "error"); return; }
   if (!window.ethereum) { toast("No wallet found. Install MetaMask or use a browser that has it.", "error"); return; }
   var btn = $("#btnAnchor");
   try {
@@ -696,25 +711,21 @@ async function doAnchor() {
     var ok = await confirmDialog({
       title: "Publish this fingerprint?",
       html: "<p>Your wallet will ask you to confirm one transaction on the <b>Sepolia test network</b>.</p>" +
-        "<ul><li>Published: only the 64-character hash <span class='mono'>" + esc(shortHash(latest.hash)) + "</span></li>" +
+        "<ul><li>Published: only the 64-character hash <span class='mono'>" + esc(shortHash(latest.hash)) + "</span>, your wallet address and the time</li>" +
         "<li>Not published: message text, names, images or phone numbers</li>" +
         "<li>Cost: free test coins, no real money</li></ul>" +
-        "<p class='small muted'>Public blockchain entries cannot be deleted.</p>",
+        "<p class='small muted'>Public blockchain entries cannot be deleted, even if you later wipe your vault.</p>",
       confirm: "Open wallet"
     });
     if (!ok) return;
     setBusy(btn, true, "Waiting for wallet…");
     var accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
     state.wallet.account = accounts[0];
-    try {
-      await window.ethereum.request({ method: "wallet_switchEthereumChain", params: [{ chainId: SEPOLIA_CHAIN }] });
-    } catch (e) { throw new Error("Please switch your wallet to the Sepolia test network, then try again."); }
+    try { await window.ethereum.request({ method: "wallet_switchEthereumChain", params: [{ chainId: SEPOLIA_CHAIN }] }); }
+    catch (e) { throw new Error("Please switch your wallet to the Sepolia test network, then try again."); }
     state.wallet.chainId = SEPOLIA_CHAIN;
-    var tx = await window.ethereum.request({
-      method: "eth_sendTransaction",
-      params: [{ from: accounts[0], to: ANCHOR_CONTRACT, data: encodeAnchor(latest.hash) }]
-    });
-    await api("/anchor", "POST", { tx_hash: tx, vault_hash: latest.hash });
+    var tx = await window.ethereum.request({ method: "eth_sendTransaction", params: [{ from: accounts[0], to: contractAddr(), data: encodeAnchor(latest.hash) }] });
+    await api("/anchor", "POST", { tx_hash: tx, vault_hash: latest.hash, mode: "contract", chain_id: SEPOLIA_CHAIN, contract: contractAddr() });
     state.chain = { status: "unchecked" };
     toast("Transaction submitted. It still needs to be confirmed on the network.", "success");
     await refreshData();
@@ -727,28 +738,43 @@ async function doAnchor() {
 async function verifyOnChain() {
   var a = state.anchor;
   if (!a) return;
+  if (!contractOK()) { renderProof(); return; }
   if (!window.ethereum) { state.chain = { status: "nowallet" }; renderProof(); return; }
   state.chain = { status: "checking" }; renderProof();
+  var req = function (m, p) { return window.ethereum.request({ method: m, params: p }); };
   try {
-    var chainId = await window.ethereum.request({ method: "eth_chainId" });
+    var chainId = await req("eth_chainId");
     state.wallet.chainId = chainId;
     if (chainId !== SEPOLIA_CHAIN) { state.chain = { status: "wrongnet" }; renderAll(); return; }
-    var tx = await window.ethereum.request({ method: "eth_getTransactionByHash", params: [a.tx_hash] });
+    var tx = await req("eth_getTransactionByHash", [a.tx_hash]);
     if (!tx) { state.chain = { status: "notfound" }; renderAll(); return; }
-    if (!tx.blockNumber) { state.chain = { status: "pending" }; renderAll(); return; }
-    var rc = await window.ethereum.request({ method: "eth_getTransactionReceipt", params: [a.tx_hash] });
+    var rc = tx.blockNumber ? await req("eth_getTransactionReceipt", [a.tx_hash]) : null;
     if (!rc) { state.chain = { status: "pending" }; renderAll(); return; }
     if (rc.status !== "0x1") { state.chain = { status: "failed" }; renderAll(); return; }
-    var sameTo = contractOK() && tx.to && tx.to.toLowerCase() === ANCHOR_CONTRACT.toLowerCase();
-    var sameData = (tx.input || tx.data || "").toLowerCase() === encodeAnchor(a.vault_hash).toLowerCase();
-    state.chain = (sameTo && sameData) ? { status: "confirmed", block: parseInt(rc.blockNumber, 16) } : { status: "mismatch" };
+    var toOk = rc.to && rc.to.toLowerCase() === contractAddr().toLowerCase();
+    var block = parseInt(rc.blockNumber, 16);
+    if (!toOk) { state.chain = { status: "mismatch", block: block }; await reportState(a.tx_hash, "mismatch"); renderAll(); return; }
+    state.chain = { status: "confirmed", block: block };
+    await reportState(a.tx_hash, "confirmed");
+    // read the anchored fingerprint back from the contract
+    var out = decodeGet(await req("eth_call", [{ to: contractAddr(), data: encodeGet(a.vault_hash) }, "latest"]));
+    var inVault = state.items.some(function (i) { return i.hash === a.vault_hash; });
+    var intact = state.verify && state.verify.ok;
+    if (out && out.exists && inVault && intact) {
+      state.chain = { status: "verified", block: out.block || block, timestamp: out.timestamp };
+      await reportState(a.tx_hash, "verified");
+      toast("Verified: the contract holds this fingerprint and it matches your intact vault.", "success");
+    } else {
+      state.chain = { status: "mismatch", block: block };
+      await reportState(a.tx_hash, "mismatch");
+    }
     renderAll();
-    if (state.chain.status === "confirmed") toast("Verified: this transaction is on Sepolia and contains your vault hash.", "success");
   } catch (e) {
     state.chain = { status: "unchecked" }; renderAll();
     toast("Could not read the blockchain: " + walletError(e, "unknown error"), "error");
   }
 }
+async function reportState(tx, st) { try { await api("/anchor/state", "POST", { tx_hash: tx, state: st }); } catch (e) {} }
 
 /* ======================= REPORTS ======================= */
 function renderReportState() {
@@ -768,7 +794,7 @@ $("#btnPreview").onclick = async function () {
   setBusy(btn, true, "Building report…");
   frame.innerHTML = '<div class="pdf-placeholder"><div><span class="spinner" style="margin-bottom:12px"></span><p class="small">Building your report…</p></div></div>';
   try {
-    var res = await fetch("/report");
+    var res = await fetch("/report", { credentials: "same-origin" });
     if (!res.ok) throw new Error("The server could not build the report (" + res.status + ").");
     var blob = await res.blob();
     if (state.reportUrl) URL.revokeObjectURL(state.reportUrl);
@@ -784,7 +810,7 @@ $("#btnDownload").onclick = async function () {
   var btn = this;
   setBusy(btn, true, "Preparing…");
   try {
-    var res = await fetch("/report");
+    var res = await fetch("/report", { credentials: "same-origin" });
     if (!res.ok) throw new Error("The server could not build the report (" + res.status + ").");
     var blob = await res.blob();
     var url = URL.createObjectURL(blob), a = document.createElement("a");
@@ -798,8 +824,23 @@ $("#btnDownload").onclick = async function () {
 };
 
 /* ---------- Boot ---------- */
-setMode("img");
-renderResult();
-renderAll();
-route();
-if (!location.hash) location.hash = "#/overview";
+window.sheshieldBoot = async function () {
+  if (location.protocol === "file:") { $("#fileNotice").hidden = false; }
+  setMode("img");
+  renderResult();
+  try {
+    state.config = await api("/config");
+    state.auth = await api("/auth/status");
+  } catch (e) { state.auth = { authenticated: false }; }
+  if (!state.auth.authenticated) { showLock(); return; }
+  await enterApp();
+};
+window.enterApp = async function () {
+  $("#lock").hidden = true; document.body.classList.remove("is-locked");
+  $("#whoami").textContent = "Vault: " + state.auth.username; $("#btnLock").hidden = false;
+  if (!state.config) { try { state.config = await api("/config"); } catch (e) {} }
+  if (!location.hash) location.hash = "#/overview";
+  state.loaded = false; renderAll();
+  route();
+  await refreshData();
+};

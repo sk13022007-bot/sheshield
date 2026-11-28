@@ -7,3 +7,16 @@ pillow
 joblib
 scikit-learn
 reportlab
+cryptography
+argon2-cffi
+# tests
+pytest
+httpx
+aiosmtpd
+pypdf
+# optional: contract tests and Sepolia deployment
+web3
+eth-tester
+py-evm
+# optional: voice-note transcription (runs locally; downloads model weights on first use)
+# faster-whisper
