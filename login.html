@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SheShield - Sign in</title>
+<style>
+  :root { --p:#5b46c9; --pd:#4535a8; --bg:#f4f2fb; --t:#1f1b3a; --mut:#6b6785; --err:#c62828; --ok:#2e7d32; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:Arial, Helvetica, sans-serif; background:var(--bg); color:var(--t); min-height:100vh; }
+  header { background:linear-gradient(135deg,#6a55d6,#4a38b0); color:#fff; padding:34px 20px 54px; text-align:center; }
+  header h1 { margin:0 0 6px; font-size:28px; }
+  header p { margin:0; opacity:.9; font-size:15px; }
+  .card { background:#fff; max-width:430px; margin:-30px auto 20px; border-radius:16px; padding:22px; box-shadow:0 6px 24px rgba(60,40,140,.15); }
+  .tabs { display:flex; gap:8px; margin-bottom:18px; }
+  .tab { flex:1; padding:11px; border:1px solid #d6d1ee; background:#fff; border-radius:10px; font-size:15px; cursor:pointer; color:var(--mut); }
+  .tab.active { background:var(--p); color:#fff; border-color:var(--p); font-weight:bold; }
+  label { display:block; font-size:14px; margin:14px 0 6px; font-weight:bold; }
+  input { width:100%; padding:12px; font-size:16px; border:1px solid #cfc9ea; border-radius:10px; outline:none; }
+  input:focus { border-color:var(--p); box-shadow:0 0 0 3px rgba(91,70,201,.15); }
+  .phone { display:flex; gap:8px; }
+  .phone span { padding:12px; background:#efecfb; border-radius:10px; font-size:16px; }
+  .pw { position:relative; }
+  .pw button { position:absolute; right:8px; top:8px; border:0; background:none; color:var(--p); cursor:pointer; font-size:14px; padding:6px; }
+  .btn { width:100%; margin-top:18px; padding:13px; font-size:16px; border:0; border-radius:10px; background:var(--p); color:#fff; cursor:pointer; }
+  .btn:hover { background:var(--pd); }
+  .btn:disabled { opacity:.6; cursor:not-allowed; }
+  .link { background:none; border:0; color:var(--p); cursor:pointer; font-size:14px; padding:6px 0; margin-top:8px; }
+  .link:disabled { color:var(--mut); cursor:default; }
+  .msg { margin-top:14px; font-size:14px; min-height:18px; }
+  .msg.err { color:var(--err); } .msg.ok { color:var(--ok); }
+  .note { font-size:13px; color:var(--mut); text-align:center; margin:14px 20px 30px; line-height:1.5; }
+  .hidden { display:none; }
+  #otp { letter-spacing:8px; text-align:center; font-size:22px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>SheShield</h1>
+  <p>Keep tamper-proof evidence. Know your next steps.</p>
+</header>
+
+<div class="card">
+  <div class="tabs">
+    <button class="tab active" id="tabIn" onclick="showTab('in')">Sign in</button>
+    <button class="tab" id="tabUp" onclick="showTab('up')">Sign up</button>
+  </div>
+
+  <!-- SIGN IN -->
+  <div id="paneIn">
+    <label>Mobile number</label>
+    <div class="phone"><span>+91</span><input id="inPhone" type="tel" inputmode="numeric" maxlength="10" placeholder="10-digit number"></div>
+    <label>Password</label>
+    <div class="pw"><input id="inPass" type="password" placeholder="Your password"><button onclick="togglePw('inPass', this)">Show</button></div>
+    <button class="btn" id="btnIn" onclick="doLogin()">Sign in</button>
+  </div>
+
+  <!-- SIGN UP -->
+  <div id="paneUp" class="hidden">
+    <div id="up1">
+      <label>Mobile number</label>
+      <div class="phone"><span>+91</span><input id="upPhone" type="tel" inputmode="numeric" maxlength="10" placeholder="10-digit number"></div>
+      <button class="btn" id="btnSend" onclick="sendOtp()">Send OTP</button>
+    </div>
+    <div id="up2" class="hidden">
+      <label>Enter the 6-digit OTP</label>
+      <input id="otp" type="text" inputmode="numeric" maxlength="6" placeholder="------">
+      <button class="btn" id="btnVerify" onclick="verifyOtp()">Verify OTP</button>
+      <button class="link" id="btnResend" onclick="sendOtp()" disabled>Resend OTP</button>
+    </div>
+    <div id="up3" class="hidden">
+      <label>Create a password (min 8 characters)</label>
+      <div class="pw"><input id="upPass" type="password" placeholder="Password"><button onclick="togglePw('upPass', this)">Show</button></div>
+      <label>Confirm password</label>
+      <input id="upPass2" type="password" placeholder="Repeat password">
+      <button class="btn" id="btnUp" onclick="doSignup()">Create account</button>
+    </div>
+  </div>
+
+  <div id="msg" class="msg"></div>
+</div>
+
+<p class="note">SheShield. Consent first, no public naming, data minimisation.<br>
+Your mobile number is never stored in readable form.</p>
+
+<script>
+  // After sign in / sign up, go to this page. Change it to your app's address.
+  const REDIRECT = "/";
+
+  const $ = id => document.getElementById(id);
+  let timer = null;
+
+  function msg(text, kind) { const m = $("msg"); m.textContent = text || ""; m.className = "msg " + (kind || ""); }
+  function showTab(t) {
+    $("paneIn").classList.toggle("hidden", t !== "in");
+    $("paneUp").classList.toggle("hidden", t !== "up");
+    $("tabIn").classList.toggle("active", t === "in");
+    $("tabUp").classList.toggle("active", t === "up");
+    msg("");
+  }
+  function togglePw(id, btn) {
+    const i = $(id); const show = i.type === "password";
+    i.type = show ? "text" : "password"; btn.textContent = show ? "Hide" : "Show";
+  }
+  function digits(s) { return s.replace(/\D/g, ""); }
+
+  async function api(path, body) {
+    const r = await fetch("/auth/" + path, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body)
+    });
+    let data = {};
+    try { data = await r.json(); } catch (e) {}
+    if (!r.ok) throw new Error(data.detail || "Something went wrong. Please try again.");
+    return data;
+  }
+  function busy(id, on, label) { const b = $(id); b.disabled = on; if (label) b.dataset.l = b.dataset.l || b.textContent; b.textContent = on ? label : (b.dataset.l || b.textContent); }
+
+  function done(token) {
+    localStorage.setItem("sheshield_token", token);
+    msg("Success! Opening SheShield...", "ok");
+    setTimeout(() => location.href = REDIRECT, 600);
+  }
+
+  async function doLogin() {
+    const phone = digits($("inPhone").value), password = $("inPass").value;
+    if (phone.length !== 10) return msg("Enter a valid 10-digit mobile number.", "err");
+    if (!password) return msg("Enter your password.", "err");
+    busy("btnIn", true, "Signing in..."); msg("");
+    try { const d = await api("login", { phone, password }); done(d.token); }
+    catch (e) { msg(e.message, "err"); }
+    busy("btnIn", false);
+  }
+
+  function startCountdown() {
+    let s = 30; const b = $("btnResend"); b.disabled = true;
+    clearInterval(timer);
+    timer = setInterval(() => {
+      s--; b.textContent = s > 0 ? "Resend OTP in " + s + "s" : "Resend OTP";
+      if (s <= 0) { clearInterval(timer); b.disabled = false; }
+    }, 1000);
+    b.textContent = "Resend OTP in 30s";
+  }
+
+  async function sendOtp() {
+    const phone = digits($("upPhone").value);
+    if (phone.length !== 10) return msg("Enter a valid 10-digit mobile number.", "err");
+    busy("btnSend", true, "Sending..."); msg("");
+    try {
+      const d = await api("send-otp", { phone });
+      $("up1").classList.add("hidden"); $("up2").classList.remove("hidden");
+      msg(d.mode === "demo" ? "Demo mode: the OTP is shown in the server window." : "OTP sent to +91 " + phone + ".", "ok");
+      startCountdown(); $("otp").focus();
+    } catch (e) { msg(e.message, "err"); }
+    busy("btnSend", false);
+  }
+
+  async function verifyOtp() {
+    const phone = digits($("upPhone").value), otp = digits($("otp").value);
+    if (otp.length !== 6) return msg("Enter the 6-digit OTP.", "err");
+    busy("btnVerify", true, "Verifying..."); msg("");
+    try {
+      await api("verify-otp", { phone, otp });
+      $("up2").classList.add("hidden"); $("up3").classList.remove("hidden");
+      msg("Number verified. Now create a password.", "ok");
+    } catch (e) { msg(e.message, "err"); }
+    busy("btnVerify", false);
+  }
+
+  async function doSignup() {
+    const phone = digits($("upPhone").value), otp = digits($("otp").value);
+    const p1 = $("upPass").value, p2 = $("upPass2").value;
+    if (p1.length < 8) return msg("Password must be at least 8 characters.", "err");
+    if (p1 !== p2) return msg("Passwords do not match.", "err");
+    busy("btnUp", true, "Creating..."); msg("");
+    try { const d = await api("signup", { phone, otp, password: p1 }); done(d.token); }
+    catch (e) { msg(e.message, "err"); }
+    busy("btnUp", false);
+  }
+</script>
+</body>
+</html>

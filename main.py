@@ -14,6 +14,8 @@ from report import build_report
 import vault
 
 app = FastAPI(title="SheShield")
+from auth import router as auth_router
+app.include_router(auth_router)
 
 MAX_BYTES = 8 * 1024 * 1024
 ANCHOR_FILE = "anchors.json"

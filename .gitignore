@@ -4,3 +4,6 @@ venv/
 vault.db
 tamper_backup.json
 anchors.json
+data/
+*.db
+toxicity_model_old.joblib
